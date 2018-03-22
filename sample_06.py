@@ -3,22 +3,23 @@ import utils.data as dt
 import utils.dates as dts
 import params
 from keras.models import Sequential
-from keras.layers import Dense, Dropout
+from keras.layers import Dense, Dropout, Input, GRU, Embedding, LSTM, Activation
 import matplotlib.pyplot as plt
 import os.path
 
 np.random.seed(123)
 ''' Model management'''
-_save_model = False
+_save_model = True
 
 ''' Input parameters '''
-symbol = 'GOOG'
-look_back = 5
+symbol = 'MSFT'
+look_back = 15
 look_ahead = 1
 train_size = 0.80
+randomize_data = False
 
 ''' Hyper parameters '''
-epochs = 50
+epochs = 20
 validation_split=0.1 # part of the training set
 batch_size = 32
 alpha = 3.0
@@ -49,11 +50,12 @@ x_low_train, _ = dt.normalize(train_data[:, 2], ref_data=train_data[:, 3], look_
 x_low_test, _ = dt.normalize(test_data[:, 2], ref_data=test_data[:, 3], look_back=look_back, look_ahead=look_ahead, alpha=alpha)
 
 ''' Randomize train data '''
-shuffled = list(np.random.permutation(x_close_train.shape[0]))
-x_close_train = x_close_train[shuffled]
-x_open_train = x_open_train[shuffled]
-x_high_train = x_high_train[shuffled]
-y_train = y_train[shuffled]
+if(randomize_data):
+    shuffled = list(np.random.permutation(x_close_train.shape[0]))
+    x_close_train = x_close_train[shuffled]
+    x_open_train = x_open_train[shuffled]
+    x_high_train = x_high_train[shuffled]
+    y_train = y_train[shuffled]
 
 ''' Reshape data for model '''
 x_close_train = np.reshape(x_close_train, (x_close_train.shape[0], x_close_train.shape[1]))
@@ -73,6 +75,8 @@ x_test = np.hstack((x_close_test, x_open_test, x_high_test, x_low_test))
 
 # x_train = np.hstack((x_close_train))
 # x_test = np.hstack((x_close_test))
+x_train = np.reshape(x_train, (x_train.shape[0], x_train.shape[1], 1))
+x_test = np.reshape(x_test, (x_test.shape[0], x_test.shape[1], 1))
 
 y_train = np.reshape(y_train, (y_train.shape[0], 1))
 y_test = np.reshape(y_test, (y_test.shape[0], 1))
@@ -81,29 +85,32 @@ print('x_test.shape', x_test.shape)
 
 ''' Build model '''
 model = Sequential()
-model.add(Dense(21, input_shape=(x_close_train.shape[1], ), activation='relu'))
-model.add(Dropout(0.2))
-model.add(Dense(21, activation='relu'))
-model.add(Dropout(0.2))
-model.add(Dense(1, activation='linear'))
-model.compile(optimizer='adam', loss='mse', metrics=['accuracy'])
+model.add(GRU(input_shape=(look_back*4, 1), output_dim=128, return_sequences=True,  activation='sigmoid', inner_activation='hard_sigmoid'))
+model.add(Dropout(0.5))
+model.add(GRU(128, activation='sigmoid', inner_activation='hard_sigmoid', return_sequences=True))
+model.add(Dropout(0.5))
+model.add(GRU(128, activation='sigmoid', inner_activation='hard_sigmoid', return_sequences=True))
+model.add(Dropout(0.5))
+model.add(GRU(128, activation='sigmoid', inner_activation='hard_sigmoid'))
+model.add(Dropout(0.5))
+model.add(Dense(1))
+model.add(Activation('linear'))
 
+model.compile(optimizer='adam', loss='mse', metrics=['accuracy'])
 ''' Train model '''
 # file_name = './models/model_{0}_weights.h5'.format(symbol)
-file_name = './models/model_OHLC_2x21_weights.h5'
+file_name = './models/model_GRU_weights.h5'
 history= None
 
 if(_save_model and os.path.isfile(file_name)):
     model.load_weights(file_name)
 else:
-    history = model.fit(x_close_train, y_train, epochs=epochs, batch_size=batch_size,
-                    validation_data=(x_close_test, y_test)
-                    )
+    history = model.fit(x_train, y_train, epochs=epochs, batch_size=batch_size, validation_data=(x_test, y_test) )
     if(_save_model):
         model.save_weights(file_name)
     
 ''' Predictions on test set (different from validation set) '''
-predictions = model.predict(x_close_train)
+predictions = model.predict(x_train)
 
 p_diff = predictions[1:]-predictions[:-1]
 a_diff = y_train[1:]-y_train[:-1]
@@ -115,7 +122,7 @@ my_accuracy = cum/res.shape[0]
 
 print('train accuracy', my_accuracy)
 
-predictions = model.predict(x_close_test)
+predictions = model.predict(x_test)
 
 p_diff = predictions[1:]-predictions[:-1]
 a_diff = y_test[1:]-y_test[:-1]

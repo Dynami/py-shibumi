@@ -169,7 +169,6 @@ def denormalize(y_data, data, alpha=3.0):
         out.append(t)
     return np.reshape(np.array(out), (-1))
 
-
 symbol = 'JPM'
 look_back = 20
 look_ahead = 1
