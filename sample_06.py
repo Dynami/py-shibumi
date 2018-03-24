@@ -3,7 +3,7 @@ import utils.data as dt
 import utils.dates as dts
 import params
 from keras.models import Sequential
-from keras.layers import Dense, Dropout, Input, GRU, Embedding, LSTM, Activation
+from keras.layers import Dense, Dropout, GRU, Activation
 import matplotlib.pyplot as plt
 import os.path
 
@@ -12,16 +12,16 @@ np.random.seed(123)
 _save_model = True
 
 ''' Input parameters '''
-symbol = 'MSFT'
-look_back = 15
+symbol = 'AAPL'
+look_back = 15 #15
 look_ahead = 1
-train_size = 0.80
+train_size = 0.8
 randomize_data = False
 
 ''' Hyper parameters '''
 epochs = 20
 validation_split=0.1 # part of the training set
-batch_size = 32
+batch_size = 64
 alpha = 3.0
 
 ''' Loading data '''
@@ -70,8 +70,8 @@ x_high_test = np.reshape(x_high_test, (x_high_test.shape[0], x_high_test.shape[1
 x_low_train = np.reshape(x_low_train, (x_low_train.shape[0], x_low_train.shape[1]))
 x_low_test = np.reshape(x_low_test, (x_low_test.shape[0], x_low_test.shape[1]))
 
-x_train = np.hstack((x_close_train, x_open_train, x_high_train, x_low_train))
-x_test = np.hstack((x_close_test, x_open_test, x_high_test, x_low_test))
+x_train = np.hstack((x_open_train, x_high_train, x_low_train))
+x_test = np.hstack((x_open_test, x_high_test, x_low_test))
 
 # x_train = np.hstack((x_close_train))
 # x_test = np.hstack((x_close_test))
@@ -85,21 +85,48 @@ print('x_test.shape', x_test.shape)
 
 ''' Build model '''
 model = Sequential()
-model.add(GRU(input_shape=(look_back*4, 1), output_dim=128, return_sequences=True,  activation='sigmoid', inner_activation='hard_sigmoid'))
-model.add(Dropout(0.5))
-model.add(GRU(128, activation='sigmoid', inner_activation='hard_sigmoid', return_sequences=True))
-model.add(Dropout(0.5))
-model.add(GRU(128, activation='sigmoid', inner_activation='hard_sigmoid', return_sequences=True))
-model.add(Dropout(0.5))
-model.add(GRU(128, activation='sigmoid', inner_activation='hard_sigmoid'))
-model.add(Dropout(0.5))
-model.add(Dense(1))
+model.add(GRU(input_shape=(look_back*3, 1), output_dim=x_train.shape[1], return_sequences=True,  activation='sigmoid', inner_activation='hard_sigmoid'))
+model.add(Dropout(0.3))
+model.add(GRU(x_train.shape[1], activation='sigmoid', return_sequences=True))
+model.add(Dropout(0.3))
+model.add(GRU(x_train.shape[1], activation='sigmoid', return_sequences=True))
+model.add(Dropout(0.3))
+model.add(GRU(x_train.shape[1], activation='sigmoid'))
+model.add(Dropout(0.3))
 model.add(Activation('linear'))
+model.add(Dense(1))
+model.compile(optimizer='adam', loss='mse')
 
-model.compile(optimizer='adam', loss='mse', metrics=['accuracy'])
+# 1°
+# model = Sequential()
+# model.add(GRU(input_shape=(look_back*4, 1), output_dim=50, return_sequences=True,  activation='sigmoid', inner_activation='hard_sigmoid'))
+# model.add(Dropout(0.3))
+# model.add(GRU(50, activation='sigmoid', return_sequences=True))
+# model.add(Dropout(0.3))
+# model.add(GRU(50, activation='sigmoid', return_sequences=True))
+# model.add(Dropout(0.3))
+# model.add(GRU(50, activation='sigmoid'))
+# model.add(Dropout(0.3))
+# model.add(Activation('linear'))
+# model.add(Dense(1))
+# model.compile(optimizer='adam', loss='mse')
+
+# 2°
+# model = Sequential()
+# model.add(GRU(input_shape=(look_back*4, 1), output_dim=128, return_sequences=True,  activation='sigmoid', inner_activation='hard_sigmoid'))
+# model.add(Dropout(0.5))
+# model.add(GRU(128, activation='sigmoid', inner_activation='hard_sigmoid', return_sequences=True))
+# model.add(Dropout(0.5))
+# model.add(GRU(128, activation='sigmoid', inner_activation='hard_sigmoid', return_sequences=True))
+# model.add(Dropout(0.5))
+# model.add(GRU(128, activation='sigmoid'))
+# model.add(Dropout(0.5))
+# model.add(Activation('linear'))
+# model.add(Dense(1))
+# model.compile(optimizer='adam', loss='mse', metrics=['accuracy'])
 ''' Train model '''
 # file_name = './models/model_{0}_weights.h5'.format(symbol)
-file_name = './models/model_GRU_weights.h5'
+file_name = './models/model_X1_GRU_weights.h5'
 history= None
 
 if(_save_model and os.path.isfile(file_name)):
@@ -148,27 +175,27 @@ test_dates = dts.int2dates(test_dates)
 
 #for p, a, d in zip(predictions, y_test, test_dates):
 #    print(d, p, a)
-
-plt.plot(test_dates[-100:], y_test[-100:], label='actual')
-plt.plot(test_dates[-100:], predictions[-100:], label='predictions')
+limit = 200
+plt.plot(test_dates[-limit:], y_test[-limit:], label='actual')
+plt.plot(test_dates[-limit:], predictions[-limit:], label='predictions')
 plt.legend()
 plt.show()
 
 ''' Print model output '''
 if(history is not None):
     print(history.history.keys())
-    plt.figure(1)
-    plt.subplot(211)
+#     plt.figure(1)
+#     plt.subplot(211)
     
-    plt.plot(history.history['acc'])
-    plt.plot(history.history['val_acc'])
-    plt.title('model accuracy')
-    plt.ylabel('accuracy')
-    plt.xlabel('epoch')
-    plt.legend(['train', 'test'], loc='upper left')
+#     plt.plot(history.history['acc'])
+#     plt.plot(history.history['val_acc'])
+#     plt.title('model accuracy')
+#     plt.ylabel('accuracy')
+#     plt.xlabel('epoch')
+#     plt.legend(['train', 'test'], loc='upper left')
     #plt.show()
     # summarize history for loss
-    plt.subplot(212)
+#     plt.subplot(212)
     plt.plot(history.history['loss'])
     plt.plot(history.history['val_loss'])
     plt.title('model loss')
