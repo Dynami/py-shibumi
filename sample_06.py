@@ -7,29 +7,30 @@ from keras.layers import Dense, Dropout, GRU, Activation
 import matplotlib.pyplot as plt
 import os.path
 
+# TODO implement look_ahead, implememt volume as feature MinMaxScaler
+
 np.random.seed(123)
 ''' Model management'''
-_save_model = True
+_save_model = False
 
 ''' Input parameters '''
-symbol = 'AAPL'
+symbol = 'GOOG'
 look_back = 15 #15
 look_ahead = 1
 train_size = 0.8
 randomize_data = False
 
 ''' Hyper parameters '''
-epochs = 20
+epochs = 5
 validation_split=0.1 # part of the training set
 batch_size = 64
-alpha = 3.0
+alpha = 5.0
 
 ''' Loading data '''
 df = dt.load_data(params.global_params['db_path'], symbol, index_col='date')
-df = df[['open', 'high', 'low', 'close']]
+df = df[['open', 'high', 'low', 'close', 'volume']]
 
 ''' Preparing data - Inline data as input parameters '''
-
 data = df.values
 train_rows = int(data.shape[0]*train_size)
 
@@ -49,12 +50,28 @@ x_high_test, _ = dt.normalize(test_data[:, 1], ref_data=test_data[:, 3], look_ba
 x_low_train, _ = dt.normalize(train_data[:, 2], ref_data=train_data[:, 3], look_back=look_back, look_ahead=look_ahead, alpha=alpha)
 x_low_test, _ = dt.normalize(test_data[:, 2], ref_data=test_data[:, 3], look_back=look_back, look_ahead=look_ahead, alpha=alpha)
 
+# Start Volume normalization
+max_vol = np.max(train_data[:, 4])
+min_vol = np.min(train_data[:, 4])
+ 
+train_data[:, 4] = 2*(train_data[:, 4]-min_vol)/(max_vol-min_vol)-1
+test_data[:, 4] = 2*(test_data[:, 4]-min_vol)/(max_vol-min_vol)-1
+ 
+x_volume_train, _ = dt.normalize(train_data[:, 4], ref_data=train_data[:, 4], look_back=look_back, look_ahead=look_ahead, alpha=alpha)
+x_volume_test, _ = dt.normalize(test_data[:, 4], ref_data=test_data[:, 4], look_back=look_back, look_ahead=look_ahead, alpha=alpha)
+ 
+x_volume_train[np.isnan(x_volume_train)]= 0.5
+x_volume_test[np.isnan(x_volume_test)]= 0.5
+# End Volume normalization
+
 ''' Randomize train data '''
 if(randomize_data):
     shuffled = list(np.random.permutation(x_close_train.shape[0]))
     x_close_train = x_close_train[shuffled]
     x_open_train = x_open_train[shuffled]
     x_high_train = x_high_train[shuffled]
+    x_volume_train = x_volume_train[shuffled]
+
     y_train = y_train[shuffled]
 
 ''' Reshape data for model '''
@@ -70,9 +87,14 @@ x_high_test = np.reshape(x_high_test, (x_high_test.shape[0], x_high_test.shape[1
 x_low_train = np.reshape(x_low_train, (x_low_train.shape[0], x_low_train.shape[1]))
 x_low_test = np.reshape(x_low_test, (x_low_test.shape[0], x_low_test.shape[1]))
 
+x_volume_train = np.reshape(x_volume_train, (x_volume_train.shape[0], x_volume_train.shape[1]))
+x_volume_test = np.reshape(x_volume_test, (x_volume_test.shape[0], x_volume_test.shape[1]))
+
 x_train = np.hstack((x_open_train, x_high_train, x_low_train))
 x_test = np.hstack((x_open_test, x_high_test, x_low_test))
 
+dimensions = int(x_train.shape[1]/x_open_train.shape[1])
+print('dimensions', dimensions)
 # x_train = np.hstack((x_close_train))
 # x_test = np.hstack((x_close_test))
 x_train = np.reshape(x_train, (x_train.shape[0], x_train.shape[1], 1))
@@ -80,12 +102,10 @@ x_test = np.reshape(x_test, (x_test.shape[0], x_test.shape[1], 1))
 
 y_train = np.reshape(y_train, (y_train.shape[0], 1))
 y_test = np.reshape(y_test, (y_test.shape[0], 1))
-print('x_train.shape', x_train.shape)
-print('x_test.shape', x_test.shape)
 
 ''' Build model '''
 model = Sequential()
-model.add(GRU(input_shape=(look_back*3, 1), output_dim=x_train.shape[1], return_sequences=True,  activation='sigmoid', inner_activation='hard_sigmoid'))
+model.add(GRU(input_shape=(look_back*dimensions, 1), output_dim=x_train.shape[1], return_sequences=True,  activation='sigmoid', inner_activation='hard_sigmoid'))
 model.add(Dropout(0.3))
 model.add(GRU(x_train.shape[1], activation='sigmoid', return_sequences=True))
 model.add(Dropout(0.3))
@@ -168,14 +188,14 @@ plt.show()
 
 print('test accuracy', my_accuracy)
 
-y_test = dt.denormalize(y_test, test_data, look_back, look_ahead, alpha)
-predictions = dt.denormalize(predictions, test_data, look_back, look_ahead, alpha)
+y_test = dt.denormalize(y_test, test_data[:, 3], look_back, look_ahead, alpha)
+predictions = dt.denormalize(predictions, test_data[:, 3], look_back, look_ahead, alpha)
 
 test_dates = dts.int2dates(test_dates)
 
 #for p, a, d in zip(predictions, y_test, test_dates):
 #    print(d, p, a)
-limit = 200
+limit = min((50, len(y_test)))
 plt.plot(test_dates[-limit:], y_test[-limit:], label='actual')
 plt.plot(test_dates[-limit:], predictions[-limit:], label='predictions')
 plt.legend()
