@@ -17,18 +17,19 @@ def normalize(data, ref_data=None, look_back=20, look_ahead=1, alpha=3.0):
     if(ref_data is None):
         ref_data = data
     
-    for index in range(look_back, data.shape[0]):
+    for index in range(look_back, data.shape[0]+1-look_ahead):
         x_data.append((data[index-look_back:index]/ref_data[index-look_back])-1)
-        y_data.append((data[index]/ref_data[index-look_back])-1)
+        y_data.append((data[index+look_ahead-1]/ref_data[index-look_back])-1)
     
     x_data = np.array(x_data)*alpha
     y_data = np.reshape(np.array(y_data)*alpha, (len(y_data), 1))
     return x_data, y_data
 
-def denormalize(y_data, data, look_back=20, look_ahead=1, alpha=3.0):
+def denormalize(y_norm, raw_data, look_back=20, look_ahead=1, alpha=3.0):
     out = []
-    for index in range(0, y_data.shape[0]):
-        t = data[index] * (y_data[index]/alpha) + data[index]
+    #for index in range(0, y_norm.shape[0]):
+    for index in range(0, y_norm.shape[0]):
+        t = raw_data[index] * (y_norm[index]/alpha) + raw_data[index]
         out.append(t)
     return np.reshape(np.array(out), (-1))
 
