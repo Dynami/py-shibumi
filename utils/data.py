@@ -25,10 +25,11 @@ def normalize(data, ref_data=None, look_back=20, look_ahead=1, alpha=3.0):
     y_data = np.reshape(np.array(y_data)*alpha, (len(y_data), 1))
     return x_data, y_data
 
-def denormalize(y_data, data, look_back=20, look_ahead=1, alpha=3.0):
+def denormalize(y_norm, raw_data, look_back=20, look_ahead=1, alpha=3.0):
     out = []
-    for index in range(0, y_data.shape[0]):
-        t = data[index] * (y_data[index]/alpha) + data[index]
+    #for index in range(0, y_norm.shape[0]):
+    for index in range(0, y_norm.shape[0]):
+        t = raw_data[index] * (y_norm[index]/alpha) + raw_data[index]
         out.append(t)
     return np.reshape(np.array(out), (-1))
 
