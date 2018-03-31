@@ -10,8 +10,8 @@ import os.path
 
 np.random.seed(123)
 ''' Model management'''
-_save_model = False
-
+save_model = False
+file_name = './models/model_mix76_weights.h5'
 ''' Input parameters '''
 symbol = '^GSPC'
 look_back = 15 #15
@@ -23,7 +23,7 @@ randomize_data = False
 epochs = 5
 validation_split=0.1 # part of the training set
 batch_size = 64
-alpha = 5.0
+alpha = 3.0
 dropout_rate = 0.5
 
 ''' Loading data '''
@@ -80,7 +80,8 @@ if(False):
     ax2.set_ylim([0,1])
     
     plt.show()
-    #exit()
+    exit()
+    
 # normalize and stack OHLC data for NN
 x_close_train, y_train = dt.normalize(train_data[:, 3], look_back=look_back, look_ahead=look_ahead, alpha=alpha)
 x_close_test, y_test = dt.normalize(test_data[:, 3], look_back=look_back, look_ahead=look_ahead, alpha=alpha)
@@ -200,34 +201,6 @@ model.compile(optimizer='adam', loss='mse')
 print(model.summary())
 
 # model = Sequential()
-# model.add(LSTM(input_shape=(look_back*4, 1), output_dim=50, return_sequences=True,  activation='sigmoid', inner_activation='hard_sigmoid'))
-# model.add(Dropout(0.3))
-# model.add(GRU(50, activation='sigmoid', return_sequences=True))
-# model.add(Dropout(0.3))
-# model.add(GRU(50, activation='sigmoid', return_sequences=True))
-# model.add(Dropout(0.3))
-# model.add(GRU(50, activation='sigmoid'))
-# model.add(Dropout(0.3))
-# model.add(Activation('linear'))
-# model.add(Dense(1))
-# model.compile(optimizer='adam', loss='mse')
-# print(model.summary())
-
-# 2°
-# model = Sequential()
-# model.add(GRU(input_shape=(look_back*4, 1), output_dim=128, return_sequences=True,  activation='sigmoid', inner_activation='hard_sigmoid'))
-# model.add(Dropout(0.5))
-# model.add(GRU(128, activation='sigmoid', inner_activation='hard_sigmoid', return_sequences=True))
-# model.add(Dropout(0.5))
-# model.add(GRU(128, activation='sigmoid', inner_activation='hard_sigmoid', return_sequences=True))
-# model.add(Dropout(0.5))
-# model.add(GRU(128, activation='sigmoid'))
-# model.add(Dropout(0.5))
-# model.add(Activation('linear'))
-# model.add(Dense(1))
-# model.compile(optimizer='adam', loss='mse', metrics=['accuracy'])
-
-# model = Sequential()
 # model.add(Dense(128, input_shape=(x_train.shape[1], ), activation='relu'))
 # model.add(Dropout(0.3))
 # model.add(Dense(128, activation='relu'))
@@ -240,14 +213,13 @@ print(model.summary())
 
 ''' Train model '''
 # file_name = './models/model_{0}_weights.h5'.format(symbol)
-file_name = './models/model_Sigmoid_GRU_weights.h5'
 history= None
 
-if(_save_model and os.path.isfile(file_name)):
+if(save_model and os.path.isfile(file_name)):
     model.load_weights(file_name)
 else:
     history = model.fit(x_train, y_train, epochs=epochs, batch_size=batch_size, validation_data=(x_test, y_test) )
-    if(_save_model):
+    if(save_model):
         model.save_weights(file_name)
     
 ''' Predictions on test set (different from validation set) '''
