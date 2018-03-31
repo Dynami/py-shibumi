@@ -11,6 +11,14 @@ def load_data(db_path, symbol, from_date=0, to_date=99991231, index_col=None):
     conn.close()
     return df
 
+def stack(data, look_back=20, look_ahead=1):
+    x_data = []
+    for index in range(look_back, data.shape[0]+1-look_ahead):
+        x_data.append(data[index-look_back:index])
+    
+    x_data = np.array(x_data)
+    return x_data
+
 def normalize(data, ref_data=None, look_back=20, look_ahead=1, alpha=3.0):
     x_data = []
     y_data = []
@@ -26,12 +34,26 @@ def normalize(data, ref_data=None, look_back=20, look_ahead=1, alpha=3.0):
     return x_data, y_data
 
 def denormalize(y_norm, raw_data, look_back=20, look_ahead=1, alpha=3.0):
-    out = []
-    #for index in range(0, y_norm.shape[0]):
-    for index in range(0, y_norm.shape[0]):
-        t = raw_data[index] * (y_norm[index]/alpha) + raw_data[index]
-        out.append(t)
-    return np.reshape(np.array(out), (-1))
+    y_norm = np.reshape(y_norm, (-1))
+    
+    out = (y_norm/alpha)*raw_data[:-look_back]+raw_data[:-look_back]
+#     out = []
+#     for index in range(0, y_norm.shape[0]):
+#         t = raw_data[index] * (y_norm[index]/alpha) + raw_data[index]
+#         out.append(t)
+#     out = np.array(out)
+    return np.reshape(out, (-1))
+
+def min_max_normalize(data, method='sigmoid'):
+    max = data.max()
+    min = data.min()
+    out = (data-min)/(max-min)
+    if(method == 'sigmoid'):
+        return out
+    elif(method == 'tanh'):
+        return out*2-1
+    else:
+        return data
 
 def split_data(x_data, y_data, raw_data, train_size, dates=None, random_state=True):
     train_rows = int(round(x_data.shape[0] * train_size))

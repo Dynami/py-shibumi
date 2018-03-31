@@ -2,19 +2,18 @@ import numpy as np
 import utils.data as dt
 import utils.dates as dts
 import params
-from keras.models import Sequential
-from keras.layers import Dense, Dropout, GRU, Activation
+from keras.models import Sequential, Model
+from keras.layers import Dense, Dropout, GRU, Activation, LSTM, Input, Reshape, Permute
+from hmmlearn.hmm import GaussianHMM
 import matplotlib.pyplot as plt
 import os.path
-
-# TODO implement look_ahead, implememt volume as feature MinMaxScaler
 
 np.random.seed(123)
 ''' Model management'''
 _save_model = False
 
 ''' Input parameters '''
-symbol = 'GOOG'
+symbol = '^GSPC'
 look_back = 15 #15
 look_ahead = 1
 train_size = 0.8
@@ -25,19 +24,64 @@ epochs = 5
 validation_split=0.1 # part of the training set
 batch_size = 64
 alpha = 5.0
+dropout_rate = 0.5
 
 ''' Loading data '''
 df = dt.load_data(params.global_params['db_path'], symbol, index_col='date')
 df = df[['open', 'high', 'low', 'close', 'volume']]
 
 ''' Preparing data - Inline data as input parameters '''
+_log_returns = df['close'].values
+_log_returns = np.diff(np.log(_log_returns))
+_log_returns = np.insert(_log_returns, 0, [0], axis=0)
+
+rolling = df['close'].rolling(look_back)
+_mean = rolling.mean()
+_mean = dt.min_max_normalize(_mean, method='tanh')
+_mean[0:look_back-1] = 0.0
+
+_std = rolling.std()
+_std = dt.min_max_normalize(_std, method='tanh')
+_std[0:look_back-1] = 0.0
+
 data = df.values
 train_rows = int(data.shape[0]*train_size)
+test_dates = df.index.values[train_rows+look_back:]
+
+data = np.insert(data, data.shape[1], _log_returns, axis=1) #5
+data = np.insert(data, data.shape[1], _mean, axis=1) #6
+data = np.insert(data, data.shape[1], _std, axis=1) #7
 
 train_data = data[:train_rows]
 test_data = data[train_rows:]
-test_dates = df.index.values[train_rows+look_back:]
 
+#normalize volumes
+train_data[:, 4] = dt.min_max_normalize(train_data[:, 4], method='tanh') #2*(train_data[:, 4]-min_vol)/(max_vol-min_vol)-1
+test_data[:, 4] = dt.min_max_normalize(test_data[:, 4], method='tanh') #2*(test_data[:, 4]-min_vol)/(max_vol-min_vol)-1
+
+hmm_input_train = np.column_stack([train_data[:, 5]])
+hmm_input_test = np.column_stack([test_data[:, 5]])
+
+hmm_components = 3
+hmm = GaussianHMM(n_components=hmm_components, covariance_type="diag", n_iter=1000).fit(hmm_input_train)
+hmm_train = hmm.predict_proba(hmm_input_train)
+hmm_test = hmm.predict_proba(hmm_input_test)
+
+if(False):
+    ax1 = plt.subplot(2, 1, 1)
+    ax1.plot(df['close'].values[train_rows:], label='Close')
+    #plt.set_autoscaley_on(True)
+    
+    ax2 = plt.subplot(2, 1, 2)
+    # ax2.plot(test_data[:, 7])
+    ax2.plot(hmm_test[:, 0], label='Hidden 0')
+    ax2.plot(hmm_test[:, 1], label='Hidden 1')
+    ax2.plot(hmm_test[:, 2], label='Hidden 1')
+    ax2.set_ylim([0,1])
+    
+    plt.show()
+    #exit()
+# normalize and stack OHLC data for NN
 x_close_train, y_train = dt.normalize(train_data[:, 3], look_back=look_back, look_ahead=look_ahead, alpha=alpha)
 x_close_test, y_test = dt.normalize(test_data[:, 3], look_back=look_back, look_ahead=look_ahead, alpha=alpha)
 
@@ -50,19 +94,22 @@ x_high_test, _ = dt.normalize(test_data[:, 1], ref_data=test_data[:, 3], look_ba
 x_low_train, _ = dt.normalize(train_data[:, 2], ref_data=train_data[:, 3], look_back=look_back, look_ahead=look_ahead, alpha=alpha)
 x_low_test, _ = dt.normalize(test_data[:, 2], ref_data=test_data[:, 3], look_back=look_back, look_ahead=look_ahead, alpha=alpha)
 
-# Start Volume normalization
-max_vol = np.max(train_data[:, 4])
-min_vol = np.min(train_data[:, 4])
- 
-train_data[:, 4] = 2*(train_data[:, 4]-min_vol)/(max_vol-min_vol)-1
-test_data[:, 4] = 2*(test_data[:, 4]-min_vol)/(max_vol-min_vol)-1
- 
 x_volume_train, _ = dt.normalize(train_data[:, 4], ref_data=train_data[:, 4], look_back=look_back, look_ahead=look_ahead, alpha=alpha)
 x_volume_test, _ = dt.normalize(test_data[:, 4], ref_data=test_data[:, 4], look_back=look_back, look_ahead=look_ahead, alpha=alpha)
  
-x_volume_train[np.isnan(x_volume_train)]= 0.5
-x_volume_test[np.isnan(x_volume_test)]= 0.5
-# End Volume normalization
+x_volume_train[np.isnan(x_volume_train)]= 0.0
+x_volume_test[np.isnan(x_volume_test)]= 0.0
+
+x_returns_train = dt.stack(train_data[:, 5], look_back=look_back, look_ahead=look_ahead)
+x_returns_test = dt.stack(test_data[:, 5], look_back=look_back, look_ahead=look_ahead)
+
+hmm_hidden0_train = dt.stack(hmm_train[:, 0], look_back=look_back, look_ahead=look_ahead)
+hmm_hidden1_train = dt.stack(hmm_train[:, 1], look_back=look_back, look_ahead=look_ahead)
+hmm_hidden2_train = dt.stack(hmm_train[:, 2], look_back=look_back, look_ahead=look_ahead)
+
+hmm_hidden0_test = dt.stack(hmm_test[:, 0], look_back=look_back, look_ahead=look_ahead)
+hmm_hidden1_test = dt.stack(hmm_test[:, 1], look_back=look_back, look_ahead=look_ahead)
+hmm_hidden2_test = dt.stack(hmm_test[:, 2], look_back=look_back, look_ahead=look_ahead)
 
 ''' Randomize train data '''
 if(randomize_data):
@@ -71,6 +118,10 @@ if(randomize_data):
     x_open_train = x_open_train[shuffled]
     x_high_train = x_high_train[shuffled]
     x_volume_train = x_volume_train[shuffled]
+    x_returns_train = x_returns_train[shuffled]
+    hmm_hidden0_train = hmm_hidden0_train[shuffled]
+    hmm_hidden1_train = hmm_hidden1_train[shuffled]
+#     hmm_hidden2_train = hmm_hidden2_train[shuffled]
 
     y_train = y_train[shuffled]
 
@@ -90,36 +141,67 @@ x_low_test = np.reshape(x_low_test, (x_low_test.shape[0], x_low_test.shape[1]))
 x_volume_train = np.reshape(x_volume_train, (x_volume_train.shape[0], x_volume_train.shape[1]))
 x_volume_test = np.reshape(x_volume_test, (x_volume_test.shape[0], x_volume_test.shape[1]))
 
-x_train = np.hstack((x_open_train, x_high_train, x_low_train))
-x_test = np.hstack((x_open_test, x_high_test, x_low_test))
+x_returns_train = np.reshape(x_returns_train, (x_returns_train.shape[0], x_returns_train.shape[1]))
+x_returns_test = np.reshape(x_returns_test, (x_returns_test.shape[0], x_returns_test.shape[1]))
+
+hmm_hidden0_train = np.reshape(hmm_hidden0_train, (hmm_hidden0_train.shape[0], hmm_hidden0_train.shape[1]))*2-1
+hmm_hidden1_train = np.reshape(hmm_hidden1_train, (hmm_hidden1_train.shape[0], hmm_hidden1_train.shape[1]))*2-1
+hmm_hidden2_train = np.reshape(hmm_hidden2_train, (hmm_hidden2_train.shape[0], hmm_hidden2_train.shape[1]))*2-1
+
+hmm_hidden0_test = np.reshape(hmm_hidden0_test, (hmm_hidden0_test.shape[0], hmm_hidden0_test.shape[1]))*2-1
+hmm_hidden1_test = np.reshape(hmm_hidden1_test, (hmm_hidden1_test.shape[0], hmm_hidden1_test.shape[1]))*2-1
+hmm_hidden2_test = np.reshape(hmm_hidden2_test, (hmm_hidden2_test.shape[0], hmm_hidden2_test.shape[1]))*2-1
+
+x_train = np.hstack((x_open_train, x_high_train, x_low_train, x_returns_train, hmm_hidden0_train, hmm_hidden1_train, hmm_hidden2_train))
+x_test = np.hstack((x_open_test, x_high_test, x_low_test, x_returns_test, hmm_hidden0_test, hmm_hidden1_test, hmm_hidden2_test))
 
 dimensions = int(x_train.shape[1]/x_open_train.shape[1])
 print('dimensions', dimensions)
 # x_train = np.hstack((x_close_train))
 # x_test = np.hstack((x_close_test))
-x_train = np.reshape(x_train, (x_train.shape[0], x_train.shape[1], 1))
-x_test = np.reshape(x_test, (x_test.shape[0], x_test.shape[1], 1))
 
-y_train = np.reshape(y_train, (y_train.shape[0], 1))
-y_test = np.reshape(y_test, (y_test.shape[0], 1))
 
 ''' Build model '''
-model = Sequential()
-model.add(GRU(input_shape=(look_back*dimensions, 1), output_dim=x_train.shape[1], return_sequences=True,  activation='sigmoid', inner_activation='hard_sigmoid'))
-model.add(Dropout(0.3))
-model.add(GRU(x_train.shape[1], activation='sigmoid', return_sequences=True))
-model.add(Dropout(0.3))
-model.add(GRU(x_train.shape[1], activation='sigmoid', return_sequences=True))
-model.add(Dropout(0.3))
-model.add(GRU(x_train.shape[1], activation='sigmoid'))
-model.add(Dropout(0.3))
-model.add(Activation('linear'))
-model.add(Dense(1))
-model.compile(optimizer='adam', loss='mse')
-
-# 1°
+# x_train = np.reshape(x_train, (x_train.shape[0], x_train.shape[1], 1))
+# x_test = np.reshape(x_test, (x_test.shape[0], x_test.shape[1], 1))
+# y_train = np.reshape(y_train, (y_train.shape[0], 1))
+# y_test = np.reshape(y_test, (y_test.shape[0], 1))
+#   
 # model = Sequential()
-# model.add(GRU(input_shape=(look_back*4, 1), output_dim=50, return_sequences=True,  activation='sigmoid', inner_activation='hard_sigmoid'))
+# model.add(GRU(input_shape=(look_back*dimensions, 1), output_dim=x_train.shape[1], return_sequences=True,  activation='sigmoid', inner_activation='hard_sigmoid'))
+# model.add(Dropout(dropout_rate))
+# # model.add(GRU(x_train.shape[1], activation='sigmoid', return_sequences=True))
+# # model.add(Dropout(dropout_rate))
+# # model.add(GRU(x_train.shape[1], activation='sigmoid', return_sequences=True))
+# # model.add(Dropout(dropout_rate))
+# model.add(GRU(x_train.shape[1], activation='sigmoid'))
+# model.add(Dropout(dropout_rate))
+# model.add(Activation('linear'))
+# model.add(Dense(1))
+# model.compile(optimizer='adam', loss='mse')
+
+print('x_train.shape', x_train.shape)
+# 1°
+activation_method = 'tanh'
+X = Input(shape=(x_train.shape[1], ))
+Y = Dense(x_train.shape[1], activation=activation_method)(X)
+Y = Dropout(dropout_rate)(Y)
+# Y = Dense(x_train.shape[1], activation=activation_method)(Y)
+# Y = Dropout(dropout_rate)(Y)
+Y = Reshape((x_train.shape[1], 1))(Y)
+Y = GRU(x_train.shape[1], activation=activation_method, return_sequences=True)(Y)
+Y = Dropout(dropout_rate)(Y)
+# Y = GRU(x_train.shape[1], activation=activation_method, return_sequences=True)(Y)
+# Y = Dropout(dropout_rate)(Y)
+Y = GRU(x_train.shape[1], activation=activation_method)(Y)
+Y = Dropout(dropout_rate)(Y)
+Y = Dense(1, activation='linear')(Y)
+model = Model(X, Y)
+model.compile(optimizer='adam', loss='mse')
+print(model.summary())
+
+# model = Sequential()
+# model.add(LSTM(input_shape=(look_back*4, 1), output_dim=50, return_sequences=True,  activation='sigmoid', inner_activation='hard_sigmoid'))
 # model.add(Dropout(0.3))
 # model.add(GRU(50, activation='sigmoid', return_sequences=True))
 # model.add(Dropout(0.3))
@@ -130,6 +212,7 @@ model.compile(optimizer='adam', loss='mse')
 # model.add(Activation('linear'))
 # model.add(Dense(1))
 # model.compile(optimizer='adam', loss='mse')
+# print(model.summary())
 
 # 2°
 # model = Sequential()
@@ -144,9 +227,21 @@ model.compile(optimizer='adam', loss='mse')
 # model.add(Activation('linear'))
 # model.add(Dense(1))
 # model.compile(optimizer='adam', loss='mse', metrics=['accuracy'])
+
+# model = Sequential()
+# model.add(Dense(128, input_shape=(x_train.shape[1], ), activation='relu'))
+# model.add(Dropout(0.3))
+# model.add(Dense(128, activation='relu'))
+# model.add(Dropout(0.3))
+# model.add(Dense(128, activation='relu'))
+# model.add(Dropout(0.3))
+# model.add(Activation('linear'))
+# model.add(Dense(1))
+# model.compile(optimizer='adam', loss='mse', metrics=['accuracy'])
+
 ''' Train model '''
 # file_name = './models/model_{0}_weights.h5'.format(symbol)
-file_name = './models/model_X1_GRU_weights.h5'
+file_name = './models/model_Sigmoid_GRU_weights.h5'
 history= None
 
 if(_save_model and os.path.isfile(file_name)):
@@ -158,9 +253,9 @@ else:
     
 ''' Predictions on test set (different from validation set) '''
 predictions = model.predict(x_train)
-
-p_diff = predictions[1:]-predictions[:-1]
-a_diff = y_train[1:]-y_train[:-1]
+print('predictions.shape', predictions.shape)
+p_diff = np.diff(np.reshape(predictions, predictions.shape[0])) # predictions[1:]-predictions[:-1]
+a_diff = np.diff(np.reshape(y_train, y_train.shape[0])) # y_train[1:]-y_train[:-1]
 
 res = p_diff * a_diff
 res = np.where(res > 0., 1., 0.)
@@ -171,8 +266,8 @@ print('train accuracy', my_accuracy)
 
 predictions = model.predict(x_test)
 
-p_diff = predictions[1:]-predictions[:-1]
-a_diff = y_test[1:]-y_test[:-1]
+p_diff = np.diff(np.reshape(predictions, predictions.shape[0])) # predictions[1:]-predictions[:-1]
+a_diff = np.diff(np.reshape(y_test, y_test.shape[0])) # y_train[1:]-y_train[:-1]
 
 res = p_diff * a_diff
 res = np.where(res > 0., 1., 0.)
@@ -193,9 +288,7 @@ predictions = dt.denormalize(predictions, test_data[:, 3], look_back, look_ahead
 
 test_dates = dts.int2dates(test_dates)
 
-#for p, a, d in zip(predictions, y_test, test_dates):
-#    print(d, p, a)
-limit = min((50, len(y_test)))
+limit = min((200, len(y_test)))
 plt.plot(test_dates[-limit:], y_test[-limit:], label='actual')
 plt.plot(test_dates[-limit:], predictions[-limit:], label='predictions')
 plt.legend()

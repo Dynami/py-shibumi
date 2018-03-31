@@ -1,6 +1,7 @@
 import numpy as np
 import utils.data as dt
 import params
+from sample_06 import x_returns_train
 
 np.random.seed(123)
 ''' Model management'''
@@ -44,6 +45,9 @@ x_high_test, _ = dt.normalize(test_data[:, 1], ref_data=test_data[:, 3], look_ba
 x_low_train, _ = dt.normalize(train_data[:, 2], ref_data=train_data[:, 3], look_back=look_back, look_ahead=look_ahead, alpha=alpha)
 x_low_test, _ = dt.normalize(test_data[:, 2], ref_data=test_data[:, 3], look_back=look_back, look_ahead=look_ahead, alpha=alpha)
 
+x_returns_train = dt.stack(train_data[:, 5], look_back=look_back, look_ahead=look_ahead)
+x_returns_test = dt.stack(test_data[:, 5], look_back=look_back, look_ahead=look_ahead)
+
 ''' Randomize train data '''
 if(randomize_data):
     shuffled = list(np.random.permutation(x_close_train.shape[0]))
@@ -64,6 +68,9 @@ x_high_test = np.reshape(x_high_test, (x_high_test.shape[0], x_high_test.shape[1
 
 x_low_train = np.reshape(x_low_train, (x_low_train.shape[0], x_low_train.shape[1]))
 x_low_test = np.reshape(x_low_test, (x_low_test.shape[0], x_low_test.shape[1]))
+
+x_returns_train = np.reshape(x_returns_train, (x_returns_train.shape[0], x_returns_train.shape[1]))
+x_returns_test = np.reshape(x_returns_test, (x_returns_test.shape[0], x_returns_test.shape[1]))
 
 x_train = np.hstack((x_open_train, x_high_train, x_low_train))
 x_test = np.hstack((x_open_test, x_high_test, x_low_test))
