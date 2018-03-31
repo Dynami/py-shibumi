@@ -59,16 +59,16 @@ model.add(Dense(1, activation='tanh'))
 model.compile(optimizer='adam', loss='mse', metrics=['accuracy'])
 
 ''' Train model '''
-file_name = './models/model_{0}_weights.h5'.format(symbol)
+rnn_weights_file = './models/model_{0}_weights.h5'.format(symbol)
 history= None
 
-if(os.path.isfile(file_name)):
-    model.load_weights(file_name)
+if(os.path.isfile(rnn_weights_file)):
+    model.load_weights(rnn_weights_file)
 else:
     history = model.fit(x_close_train, y_train, epochs=epochs, batch_size=batch_size,
                     validation_data=(x_close_test, y_test)
                     )
-    model.save_weights(file_name)
+    model.save_weights(rnn_weights_file)
     
 ''' Predictions on test set (different from validation set) '''
 predictions = model.predict(x_close_train)

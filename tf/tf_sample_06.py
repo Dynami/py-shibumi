@@ -5,7 +5,7 @@ from sample_06 import x_returns_train
 
 np.random.seed(123)
 ''' Model management'''
-_save_model = True
+save_model = True
 
 ''' Input parameters '''
 symbol = 'AAPL'
