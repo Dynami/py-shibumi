@@ -187,7 +187,7 @@ l_size = 60# x_train.shape[1]
 X = Input(shape=(x_train.shape[1], ))
 Y = Dense(l_size, activation=activation_method)(X)
 Y = Dropout(dropout_rate)(Y)
-# Y = Dense(x_train.shape[1], activation=activation_method)(Y)
+# Y = Dense(l_size, activation=activation_method)(Y)
 # Y = Dropout(dropout_rate)(Y)
 Y = Reshape((l_size, 1))(Y)
 Y = GRU(l_size, activation=activation_method, return_sequences=True)(Y)
@@ -282,8 +282,8 @@ plt.show()
 
 print('test accuracy', my_accuracy)
 
-y_test = dt.denormalize(y_test, test_data[:, 3], look_back, look_ahead, alpha)
-predictions = dt.denormalize(predictions, test_data[:, 3], look_back, look_ahead, alpha)
+# y_test = dt.denormalize(y_test, test_data[:, 3], look_back, look_ahead, alpha)
+# predictions = dt.denormalize(predictions, test_data[:, 3], look_back, look_ahead, alpha)
 
 test_dates = dts.int2dates(test_dates)
 
