@@ -2,8 +2,8 @@ import numpy as np
 import utils.data as dt
 import utils.dates as dts
 import params
-from keras.models import Sequential, Model
-from keras.layers import Dense, Dropout, GRU, Activation, LSTM, Input, Reshape, Permute
+from keras.models import Model
+from keras.layers import Dense, Dropout, GRU, LSTM, Input, Reshape
 from hmmlearn.hmm import GaussianHMM
 import matplotlib.pyplot as plt
 import os.path
@@ -32,17 +32,18 @@ df = df[['open', 'high', 'low', 'close', 'volume']]
 
 ''' Preparing data - Inline data as input parameters '''
 _log_returns = df['close'].values
-_log_returns = np.diff(np.log(_log_returns))
-_log_returns = np.insert(_log_returns, 0, [0], axis=0)
+_log_returns = np.diff(np.log(_log_returns), n=look_ahead)
+#_log_returns = np.insert(_log_returns, 0, [0, 0], axis=0)
+_log_returns = np.insert(_log_returns, 0, np.zeros((look_ahead)), axis=0)
 
 rolling = df['close'].rolling(look_back)
 _mean = rolling.mean()
 _mean = dt.min_max_normalize(_mean, method='tanh')
-_mean[0:look_back-1] = 0.0
+_mean[0:look_back-look_ahead] = 0.0
 
 _std = rolling.std()
 _std = dt.min_max_normalize(_std, method='tanh')
-_std[0:look_back-1] = 0.0
+_std[0:look_back-look_ahead] = 0.0
 
 data = df.values
 train_rows = int(data.shape[0]*train_size)
