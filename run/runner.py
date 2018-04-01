@@ -15,11 +15,11 @@ config = {
     'rnn_weights_path':'../models/run/model_mix76_weights.h5',
     'look_back': 15,
     'look_ahead': 1,
-    'alpha': 3.0
+    'alpha': 10.0
     }
 
 def run(symbol, date, next_date, rnn_model, hmm_model):
-    x_test, x_test_dates, y_test, dims = m.data_for_prediction(symbol, 
+    x_test, _, y_test, _ = m.data_for_prediction(symbol, 
                                          date,
                                          next_date, 
                                          look_back=config['look_back'], 
@@ -58,8 +58,11 @@ if __name__ == '__main__':
     #  from  
     win = 0.85
     loss = -1
+    amount = 500.0
+    limit = 30000.0
+    rate = 0.3
     
-    df = dt.load_data(params.global_params['db_path'], 'AAPL', to_date=20180323, limit=11, index_col='date')
+    df = dt.load_data(params.global_params['db_path'], 'AAPL', to_date=20180323, limit=81, index_col='date')
     dates = df.index.values.tolist()
 #     dates = [20180206, 20180207, 20180208, 20180209, 20180212, 20180213, 20180214, 20180215,
 #              20180216, 20180220, 20180221, 20180222, 20180223]
@@ -72,13 +75,12 @@ if __name__ == '__main__':
     daily_result = []
     
     symbol_num = len(params.symbols)
-    amount = 500.0
-    rate = 0.8  
     roi = []
     for date, next_date in zip(current, next):
         count = 0
         daily_roi = 0
-        single = (amount*rate)/symbol_num
+#         single = min((limit, (amount*rate)/symbol_num))
+        single = (min((limit,amount))*rate)/symbol_num
         
         for s in params.symbols:
             out = run(s['symbol'], date, next_date, rnn_model, hmm_model)
@@ -90,8 +92,14 @@ if __name__ == '__main__':
         daily_result.append(round(count, 2)/symbol_num)
         roi.append(daily_roi)
         amount += daily_roi
-        print(date, next_date)
+        print(date, next_date, round(single, 0))
     print('final result', np.sum(daily_result))
     current = dts.int2dates(current)
+    plt.figure(1)
+    plt.subplot(211)
+    plt.plot(current, np.cumsum(daily_result))
+    plt.subplot(212)
     plt.plot(current, np.cumsum(roi))
+    print('Min', np.min(np.cumsum(roi)))
+    print('Max', np.max(np.cumsum(roi)))
     plt.show()
