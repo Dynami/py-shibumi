@@ -3,6 +3,7 @@ import utils.dates as dts
 import numpy as np
 import matplotlib.pyplot as plt
 import params
+from sklearn.externals import joblib
 
 import warnings
 warnings.filterwarnings("ignore")
@@ -16,17 +17,18 @@ config = {
     'alpha': 3.0
     }
 
-def run(symbol, date, model):
+def run(symbol, date, next_date, rnn_model, hmm_model):
     x_test, x_test_dates, y_test, dims = m.data_for_prediction(symbol, 
-                                         date, 
+                                         date,
+                                         next_date, 
                                          look_back=config['look_back'], 
                                          look_ahead=config['look_ahead'], 
                                          alpha=config['alpha'],
-                                         hmm_model_file=config['hmm_model_path'])
+                                         hmm_model=hmm_model)
     
 #     print(x_test.shape, x_test_dates.shape, y_test.shape, dims)
     
-    predictions = model.predict(x_test)
+    predictions = rnn_model.predict(x_test)
 
     p_diff = np.diff(np.reshape(predictions, predictions.shape[0])) 
     a_diff = np.diff(np.reshape(y_test, y_test.shape[0]))
@@ -52,8 +54,31 @@ def run(symbol, date, model):
 
 if __name__ == '__main__':
     #symbol = 'MSFT'
-    date = 20180206
-    model = m.rnn_load_model(config['rnn_model_path'], config['rnn_weights_path'])
-    for s in params.symbols:
-        out = run(s['symbol'], date, model)
-        print(out['symbol'], round(out['accuracy']*100, 2), out['date'], out['pred'], (out['pred'] == out['actual']))
+    #  from  
+    win = 0.85
+    loss = -1
+    
+    dates = [20180206, 20180207, 20180208, 20180209, 20180212, 20180213, 20180214, 
+             20180215, 20180216, 20180219, 20180220, 20180221, 20180222, 20180223,
+             20180226, 20180227, 20180228, 20180301, 20180302, 20180305, 20180306,
+             20180307, 20180308, 20180309, 20180312, 20180313, 20180314, 20180315, 20180316  ]
+    current = dates[:-1]
+    next = dates[1:] 
+    rnn_model = m.rnn_load_model(config['rnn_model_path'], config['rnn_weights_path'])
+    hmm_model = joblib.load(config['hmm_model_path'])
+    symbol_num = len(params.symbols)
+    daily_result = []
+    for date, next_date in zip(current, next):
+        count = 0
+        for s in params.symbols:
+            out = run(s['symbol'], date, next_date, rnn_model, hmm_model)
+            print(out['symbol'], round(out['accuracy']*100, 2), out['date'], out['pred'], (out['pred'] == out['actual']))
+            res = win if( out['pred'] == out['actual']) else loss
+            count += res
+            #print(round(count, 2))
+        daily_result.append(round(count, 2)/symbol_num)
+        print(date)
+    print('final result', np.sum(daily_result))
+    current = dts.int2dates(current)
+    plt.plot(current, np.cumsum(daily_result))
+    plt.show()

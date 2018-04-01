@@ -2,19 +2,18 @@ import utils.data as dt
 import numpy as np
 import params
 from keras.models import load_model
-from sklearn.externals import joblib
 
 
-def data_for_prediction(symbol, date, look_back, look_ahead, alpha, 
-                        db_path=params.global_params['db_path'],
-                        hmm_model_file=params.global_params['hmm_model_path']
+def data_for_prediction(symbol, date, next_date, look_back, look_ahead, alpha, 
+                        hmm_model,
+                        db_path=params.global_params['db_path']
                         ):
     limit = look_back*2
     
     x_df = dt.load_data(db_path, symbol, to_date=date, limit=limit, index_col='date')
     x_df = x_df[['open', 'high', 'low', 'close', 'volume']]
     
-    y_df = dt.load_data(db_path, symbol, to_date=date+1, limit=limit, index_col='date')
+    y_df = dt.load_data(db_path, symbol, to_date=next_date, limit=limit, index_col='date')
     y_data = y_df[['close']].values
     
     x_test_dates = x_df.index.values
@@ -30,7 +29,6 @@ def data_for_prediction(symbol, date, look_back, look_ahead, alpha,
     
     hmm_input_test = np.column_stack([x_data[:, 5]])
     
-    hmm_model = joblib.load(hmm_model_file)
     hmm_test = hmm_model.predict_proba(hmm_input_test)
     
 #     print('hmm_test.shape', hmm_test.shape)
