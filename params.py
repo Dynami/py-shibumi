@@ -9,18 +9,18 @@ global_params = {
 }
 symbols = [
     #{'symbol': '^GSPC'},
-    {'symbol': 'GOOG'},
-    {'symbol': 'MSFT'},
-    {'symbol': 'AAPL'},
-    {'symbol': 'AIG'},
-    {'symbol': 'AMZN'},
-    {'symbol': 'C'},
-    {'symbol': 'JPM'},
-    {'symbol': 'CSCO'},
-    {'symbol': 'KO'},
-    {'symbol': 'MCD'},
-    {'symbol': 'MS'},
-    {'symbol': 'INTC'},
-    {'symbol': 'NKE'},
-    {'symbol': 'TSLA'}
+    {'symbol': 'GOOG'}, #0.7146950470732706
+#     {'symbol': 'MSFT'}, #0.7146950470732706
+    {'symbol': 'AAPL'}, #0.7208350388866148
+    {'symbol': 'AIG'},  #0.7191977077363897
+#     {'symbol': 'AMZN'}, #0.7339336880884159
+    {'symbol': 'C'}, #0.7265656979124028
+#     {'symbol': 'JPM'}, #0.7122390503479329
+#     {'symbol': 'CSCO'}, #0.7204257060990585
+#     {'symbol': 'KO'}, #0.703643061809251
+#     {'symbol': 'MCD'}, #0.711011051985264
+    {'symbol': 'MS'}, #0.7322963569381907
+#     {'symbol': 'INTC'}, #0.7335243553008596
+    {'symbol': 'NKE'}, #0.7122390503479329
+#     {'symbol': 'TSLA'} #0.7331168831168832
 ]#

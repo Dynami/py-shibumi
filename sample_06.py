@@ -17,7 +17,7 @@ rnn_weights_file = './models/model_mix76_weights.h5'
 hmm_model_file = './models/hmm_model.pkl'
 
 ''' Input parameters '''
-symbol = '^GSPC'
+symbol = 'TSLA'
 look_back = 15 #15
 look_ahead = 1
 train_size = 0.8

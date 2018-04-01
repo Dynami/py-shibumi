@@ -1,5 +1,6 @@
 import run.mix76 as m
 import utils.dates as dts
+import utils.data as dt
 import numpy as np
 import matplotlib.pyplot as plt
 import params
@@ -58,27 +59,39 @@ if __name__ == '__main__':
     win = 0.85
     loss = -1
     
-    dates = [20180206, 20180207, 20180208, 20180209, 20180212, 20180213, 20180214, 
-             20180215, 20180216, 20180219, 20180220, 20180221, 20180222, 20180223,
-             20180226, 20180227, 20180228, 20180301, 20180302, 20180305, 20180306,
-             20180307, 20180308, 20180309, 20180312, 20180313, 20180314, 20180315, 20180316  ]
+    df = dt.load_data(params.global_params['db_path'], 'AAPL', to_date=20180323, limit=11, index_col='date')
+    dates = df.index.values.tolist()
+#     dates = [20180206, 20180207, 20180208, 20180209, 20180212, 20180213, 20180214, 20180215,
+#              20180216, 20180220, 20180221, 20180222, 20180223]
+
+    print(type(dates))
     current = dates[:-1]
     next = dates[1:] 
     rnn_model = m.rnn_load_model(config['rnn_model_path'], config['rnn_weights_path'])
     hmm_model = joblib.load(config['hmm_model_path'])
-    symbol_num = len(params.symbols)
     daily_result = []
+    
+    symbol_num = len(params.symbols)
+    amount = 500.0
+    rate = 0.8  
+    roi = []
     for date, next_date in zip(current, next):
         count = 0
+        daily_roi = 0
+        single = (amount*rate)/symbol_num
+        
         for s in params.symbols:
             out = run(s['symbol'], date, next_date, rnn_model, hmm_model)
-            print(out['symbol'], round(out['accuracy']*100, 2), out['date'], out['pred'], (out['pred'] == out['actual']))
+#             print(out['symbol'], round(out['accuracy']*100, 2), out['date'], out['pred'], (out['pred'] == out['actual']))
             res = win if( out['pred'] == out['actual']) else loss
             count += res
+            daily_roi += single*res
             #print(round(count, 2))
         daily_result.append(round(count, 2)/symbol_num)
-        print(date)
+        roi.append(daily_roi)
+        amount += daily_roi
+        print(date, next_date)
     print('final result', np.sum(daily_result))
     current = dts.int2dates(current)
-    plt.plot(current, np.cumsum(daily_result))
+    plt.plot(current, np.cumsum(roi))
     plt.show()
