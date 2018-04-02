@@ -49,6 +49,7 @@ def run(symbol, date, next_date, rnn_model, hmm_model):
     return {'symbol': symbol, 
             'accuracy':my_accuracy, 
             'date':date+1, 
+            'out': p_diff[-1:],
             'pred': (1 if p_diff[-1:] > 0 else -1), 
             'actual': (1 if a_diff[-1:] > 0 else -1)
             }
@@ -59,8 +60,9 @@ if __name__ == '__main__':
     win = 0.85
     loss = -1
     amount = 500.0
-    limit = 30000.0
-    rate = 0.3
+    limit = 25000.0
+    rate = 0.30
+    filter = 0.015
     
     df = dt.load_data(params.global_params['db_path'], 'AAPL', to_date=20180323, limit=81, index_col='date')
     dates = df.index.values.tolist()
@@ -76,23 +78,45 @@ if __name__ == '__main__':
     
     symbol_num = len(params.symbols)
     roi = []
+    total = 0
+    total_winners = 0
     for date, next_date in zip(current, next):
         count = 0
         daily_roi = 0
 #         single = min((limit, (amount*rate)/symbol_num))
-        single = (min((limit,amount))*rate)/symbol_num
+        daily_trans = []
+        daily_winners = 0
         
         for s in params.symbols:
             out = run(s['symbol'], date, next_date, rnn_model, hmm_model)
-#             print(out['symbol'], round(out['accuracy']*100, 2), out['date'], out['pred'], (out['pred'] == out['actual']))
+            if(abs(out['out']/config['alpha']) <= filter):
+                continue
+            total += 1
+            daily_trans.append(out)
+        
+        if(len(daily_trans) == 0):
+            daily_result.append(0.0)
+            roi.append(0.0)
+            print(date, 'no transaction')
+            continue
+        
+        single = round((min((limit,amount))*rate)/len(daily_trans), 0)
+        
+        for out in daily_trans:
             res = win if( out['pred'] == out['actual']) else loss
+            daily_winners += 1. if(out['pred'] == out['actual']) else 0.
+            total_winners += 1. if(out['pred'] == out['actual']) else 0.
+            
             count += res
             daily_roi += single*res
-            #print(round(count, 2))
-        daily_result.append(round(count, 2)/symbol_num)
+            #print(out['symbol'], res)
+            
+        daily_result.append(round(count, 2)/len(daily_trans))
         roi.append(daily_roi)
         amount += daily_roi
-        print(date, next_date, round(single, 0))
+        print(date, round(daily_winners/len(daily_trans), 2), 'trans:',  len(daily_trans), 'on', symbol_num, 'of', single)
+    
+    
     print('final result', np.sum(daily_result))
     current = dts.int2dates(current)
     plt.figure(1)
@@ -102,4 +126,5 @@ if __name__ == '__main__':
     plt.plot(current, np.cumsum(roi))
     print('Min', np.min(np.cumsum(roi)))
     print('Max', np.max(np.cumsum(roi)))
+    print('Total accuracy', round(total_winners/total, 4)*100.)
     plt.show()
